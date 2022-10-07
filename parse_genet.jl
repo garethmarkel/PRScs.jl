@@ -17,13 +17,10 @@ function parse_ref(ref_file, chrom)
 end
 
 
-
-
-
 function parse_bim(bim_file, chrom)
     print("... parse bim file: $bim_file.bim ...")
 
-    df = DataFrame(CSV.File(bim_file, header = false))
+    df = DataFrame(CSV.File("$bim_file.bim", header = false))
     rename!(df, [:CHR, :SNP, :POS ,:BP, :A1 , :A2])
 
     vld_dict = select(filter(:CHR => n -> n == chrom, df), :SNP, :A1,:A2)

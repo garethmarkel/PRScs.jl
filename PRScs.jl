@@ -8,8 +8,8 @@
 
 
 using ArgParse
-#include("parse_genet.jl")
-#include("mcmc_gtb.jl")
+include("parse_genet.jl")
+include("mcmc_gtb.jl")
 
 function parse_param()
     s = ArgParseSettings()
@@ -64,6 +64,10 @@ function parse_param()
             help = "The chromosome on which the model is fitted, separated by comma, e.g., --chrom=\"1,3,5.\""
             arg_type=String
             default = "1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22"
+        "--beta_std"
+            help = "If True, return standardized posterior SNP effect sizes"
+            action = :store_true
+            default = true
         "--seed"
             help = "Non-negative integer which seeds the random number generator."
             arg_type = Int
@@ -81,11 +85,24 @@ function main()
 
     chrom_split = parse.(Int, split(parsed_args["chrom"],","))
 
-    for i in 1:lenth(chrom_split)
+    rfdir = parsed_args["ref_dir"]
+
+    for i in 1:length(chrom_split)
         chrom = chrom_split[i]
         print("process chromosome $chrom")
 
-        ref_di
+        ref_dict = parse_ref("$rfdir/snpinfo_1kg_hm3", chrom)
+
+        vld_dict = parse_bim(parsed_args["bim_prefix"],chrom)
+
+        sst_dict = parse_sumstats(ref_dict, vld_dict,parsed_args["sst_file"] , parsed_args["n_gwas"])
+
+        ld_info = parse_ldblk("$rfdir/", sst_dict, chrom)
+
+        mcmc(parsed_args["a"], parsed_args["b"], parsed_args["phi"], sst_dict, parsed_args["n_gwas"], ld_info[1], ld_info[2],
+            parsed_args["n_iter"], parsed_args["n_burnin"], parsed_args["thin"], chrom, parsed_args["out_dir"], parsed_args["beta_std"], parsed_args["seed"])
+
+        print("\n")
     end
 
     for (arg,val) in parsed_args
