@@ -47,13 +47,11 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
             if blk_size[kk] != 0
                 idx_blk = (mm+1):(mm + blk_size[kk])
 
-                ##very not sure this is right--here's the original python:
+                ##not sure this is right--here's the original python:
                 # dinvt = ld_blk[kk]+sp.diag(1.0/psi[(mm+1):(mm + blk_size[i])].T[0])
                 dinvt = ld_blk[kk] .+ Diagonal(1 ./ psi[idx_blk])
                 dinvt_chol = cholesky(Hermitian(dinvt))
 
-                #we add in the randomness to create some sampling variation
-                #TODO: determine why this is in the first command instead of the second
                 beta_tmp = dinvt_chol.L\beta_mrg[idx_blk] .+  (sqrt(sigma/n) .* rand(ndist,blk_size[kk]))
                 beta[idx_blk] = dinvt_chol.U\beta_tmp
 
