@@ -9,7 +9,7 @@ T Ge, CY Chen, Y Ni, YCA Feng, JW Smoller. Polygenic Prediction via Bayesian Reg
 
 Current status:
 
-faster than PRScs just by virtue of the language (the command line arg parsing is much slower, but you can also just run the function)
+* still needs to be tested/verified on genetic data
 
 Future additions:
-more flexibility with the CS priors
+* more flexibility with the CS priors ?
