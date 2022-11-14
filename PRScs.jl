@@ -12,6 +12,10 @@ include("parse_genet.jl")
 include("mcmc_gtb.jl")
 
 function parse_param()
+
+
+    #argparse seems to be the slowest part of this program
+    #TODO: test and replace this--can't be hard, I'm just lazy
     s = ArgParseSettings()
 
     @add_arg_table s begin
@@ -79,23 +83,31 @@ function parse_param()
 end
 
 function main()
+
     parsed_args = parse_param()
 
-    println(parsed_args["chrom"])
-
+    #get the chromosomes
     chrom_split = parse.(Int, split(parsed_args["chrom"],","))
 
+    #get the reference directory for the LD information
     rfdir = parsed_args["ref_dir"]
 
-    for i in 1:length(chrom_split)
+    #could get fancier with the paralellization--maybe if future additions are really
+    #slow i'll optimize this to really take advantage of large servers but this should make
+    #base PRS-cs run fast on a desktop
+    Threads.@threads for i in 1:length(chrom_split)
         chrom = chrom_split[i]
         print("process chromosome $chrom")
 
+        #process the reference LD directory
         ref_dict = parse_ref("$rfdir/snpinfo_1kg_hm3", chrom)
 
+        #bim file containing valid SNPs
         vld_dict = parse_bim(parsed_args["bim_prefix"],chrom)
 
+        #parse the summary stats
         sst_dict = parse_sumstats(ref_dict, vld_dict,parsed_args["sst_file"] , parsed_args["n_gwas"])
+
 
         ld_info = parse_ldblk("$rfdir/", sst_dict, chrom)
 
@@ -105,25 +117,6 @@ function main()
         print("\n")
     end
 
-    for (arg,val) in parsed_args
-        println("  $arg  =>  $val")
-    end
 end
 
 main()
-
-
-#
-# ldblk_dir = "/Users/garethmarkel/Documents/ldblk_1kg_eur"
-# chrom = 22
-# n_subj = 200000
-#
-#
-#
-# ref_dict = parse_ref("/Users/garethmarkel/Documents/ldblk_1kg_eur/snpinfo_1kg_hm3", chrom)
-#
-# vld_dict = parse_bim("/Users/garethmarkel/Documents/PRScs/test_data/test.bim",chrom)
-#
-# sst_dict = parse_sumstats(ref_dict, vld_dict, "/Users/garethmarkel/Documents/PRScs/test_data/sumstats.txt", n_subj)
-#
-# tst = parse_ldblk(ldblk_dir, sst_dict, chrom)

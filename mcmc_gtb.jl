@@ -4,7 +4,7 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
     print("... MCMC ...")
 
     ##un hard code this! TODO
-    Random.seed!(3)
+    Random.seed!(seed)
 
     beta_mrg = sst_dict[:,:BETA]
     maf = sst_dict[:,:MAF]
@@ -47,14 +47,16 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
             if blk_size[kk] != 0
                 idx_blk = (mm+1):(mm + blk_size[kk])
 
-                ##not sure this is right--here's the original python:
-                # dinvt = ld_blk[kk]+sp.diag(1.0/psi[(mm+1):(mm + blk_size[i])].T[0])
                 dinvt = ld_blk[kk] .+ Diagonal(1 ./ psi[idx_blk])
                 dinvt_chol = cholesky(Hermitian(dinvt))
 
+                #Here, we use the cholesky decomposition to (Relatively) efficiently invert
+                #the matrix (D+ψ⁻¹) to get Σ = (D+ψ⁻¹)⁻¹ and sample in one fell swoop
+                #this gets more useful with big LD blocks (or if you want to fit this on like a whole chromosome)
                 beta_tmp = dinvt_chol.L\beta_mrg[idx_blk] .+  (sqrt(sigma/n) .* rand(ndist,blk_size[kk]))
                 beta[idx_blk] = dinvt_chol.U\beta_tmp
 
+                #assume the LD blocks are independent, and iterate on the sum
                 quad = quad + beta[idx_blk]'*dinvt*beta[idx_blk]
                 mm = mm + blk_size[kk]
             end
@@ -64,12 +66,15 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
         err = max(n/2.0 * (1.0 - 2.0*sum(beta.*beta_mrg) + quad), n/2.0*sum((beta.^2)./psi))
 
         #update sigma^2
-        sigma = 1.0 ./ rand(Gamma((n+p)/2.0, 1/err),1)
-        sigma = sigma[1]
+        #prior versions sampled from a gamma(a,b^-1) but let's not do that anymore
+        sigma = rand(InverseGamma((n+p)/2.0, err))
 
         delta = rand.(Gamma.(a+b, 1.0 ./ (psi .+ phi)),1)
         delta = [i[1] for i in delta]
 
+        #to run this, you may have to pull the fork https://github.com/garethmarkel/GenInvGaussian.jl
+        #again, this is not my original work--the original repo was for an older version of julia
+        #so I just updated the "paperwork" to get back to working on reimplementing PRScs
         psi_gig = GeneralizedInverseGaussian.(a-0.5, 2 .* delta, n .* (beta.^2) ./ sigma)
 
         ##TODO: fix this--should be able to broadcast it but the rand function in the implementation
