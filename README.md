@@ -31,12 +31,12 @@ a wacky discrete space grid into the problem, which really simplifies the proble
 # What continuous shrinkage priors do we use?
 
 Right now, PRScs.jl implements:
-*Strawderman-Berger
+* Strawderman-Berger
 
-(Hopefullu) soon, PRScs.jl will implement:
-*Dirichlet Laplace
+(Hopefully) soon, PRScs.jl will implement:
+* Dirichlet Laplace
 
-#How do you derive the posterior mean for the beta coefficients?
+# How do you derive the posterior mean for the beta coefficients?
 
 At some point, I'll do a more detailed writeup, but the key point is that the LD
 matrix is $D = \frac{X'X}{N}$, and that the GWAS $\hat{\beta}$ we calculate are $\hat{\beta} = \frac{X'Y}{N}$.
