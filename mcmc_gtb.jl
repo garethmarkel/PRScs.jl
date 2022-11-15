@@ -1,5 +1,60 @@
 using Random, Distributions, GenInvGaussian
 
+##TODO:
+# 1. implement
+#   a. update_beta
+#   b. update_global_scale
+#   c. update_local_scale
+
+
+function get_shrinkage_mat(model, idx_blk, psi, lambda, tau)
+    if model == 'strawderman'
+        return Diagonal(1 ./ psi[idx_blk])
+    elseif model == 'dirichlet-laplace'
+        return Diagonal(1 ./ (psi[idx_blk] .* lambda .* lambda .* tau))
+    end
+end
+
+#function to generate psi--notation varies prior ro prior, but I'm by convention setting it to be
+#one with the GenInvGaussian dist
+function get_psi(model, a, beta, delta, sigma)
+    #to run this, you may have to pull the fork https://github.com/garethmarkel/GenInvGaussian.jl
+    #again, this is not my original work--the original repo was for an older version of julia
+    #so I just updated the "paperwork" to get back to working on reimplementing PRScs
+
+    psi = ones(Float64,p,1)
+
+    if model == 'strawderman'
+
+        psi_gig = GeneralizedInverseGaussian.(a-0.5, 2 .* delta, n .* (beta.^2) ./ sigma)
+
+        ##TODO: fix this--should be able to broadcast it but the rand function in the implementation
+        ##of the generlaized inverse gaussian function does one at a time
+        for jj in 1:length(psi)
+            psi[jj] = rand(psi_gig[jj])
+        end
+        psi[psi .> 1] .= 1.0
+
+        return psi
+    elseif model == 'dirichlet-laplace'
+
+        p = length(beta)
+
+        psi_gig = GeneralizedInverseGaussian.(2 .* beta ./ sqrt(sigma), 1.0 , a - 1 )
+
+        for jj in 1:length(psi)
+            psi[jj] = rand(psi_gig[jj])
+        end
+
+        psi = psi ./ sum(psi)
+
+    end
+
+    return psi
+end
+
+
+
 function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, chrom, out_dir, beta_std, seed)
     print("... MCMC ...")
 
@@ -18,6 +73,10 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
     beta = zeros(Float64,p,1)
     psi = ones(Float64,p,1)
     sigma = 1.0
+
+    ##dirichlet-laplace specific
+    lambda = 1.0
+    tau = ones(Float64,p,1)
 
     # if phi == None:
     #     phi = 1.0; phi_updt = True
@@ -47,7 +106,10 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
             if blk_size[kk] != 0
                 idx_blk = (mm+1):(mm + blk_size[kk])
 
-                dinvt = ld_blk[kk] .+ Diagonal(1 ./ psi[idx_blk])
+                shrinkage_mat = get_shrinkage_mat('strawderman', idx_blk, psi, lambda, tau)
+
+                dinvt = ld_blk[kk] .+ shrinkage_mat
+
                 dinvt_chol = cholesky(Hermitian(dinvt))
 
                 #Here, we use the cholesky decomposition to (Relatively) efficiently invert
@@ -69,20 +131,20 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
         #prior versions sampled from a gamma(a,b^-1) but let's not do that anymore
         sigma = rand(InverseGamma((n+p)/2.0, err))
 
-        delta = rand.(Gamma.(a+b, 1.0 ./ (psi .+ phi)),1)
-        delta = [i[1] for i in delta]
+        psi = get_psi(model, a, beta, delta, sigma)
 
-        #to run this, you may have to pull the fork https://github.com/garethmarkel/GenInvGaussian.jl
-        #again, this is not my original work--the original repo was for an older version of julia
-        #so I just updated the "paperwork" to get back to working on reimplementing PRScs
-        psi_gig = GeneralizedInverseGaussian.(a-0.5, 2 .* delta, n .* (beta.^2) ./ sigma)
-
-        ##TODO: fix this--should be able to broadcast it but the rand function in the implementation
-        ##of the generlaized inverse gaussian function does one at a time
-        for jj in 1:length(psi)
-            psi[jj] = rand(psi_gig[jj])
+        if model == 'strawderman'
+            delta = rand.(Gamma.(a+b, 1.0 ./ (psi .+ phi)),1)
+            delta = [i[1] for i in delta]
         end
-        psi[psi .> 1] .= 1.0
+
+        if model == 'dirichlet-laplace'
+            lambda = rand(GeneralizedInverseGaussian(2*sum(abs(beta)./ psi)/sqrt(sigma),1.0,p*a-p)
+
+            tau_inv = rand.(InverseGaussian.(lambda .* psi .* sqrt(sigma) ./ beta,1.0))
+            tau = 1 ./ tau_inv
+        end
+
 
         if phi_updt == true
             w = rand(Gamma(1.0, 1.0/(phi+1.0)))
