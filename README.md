@@ -31,10 +31,9 @@ a wacky discrete space grid into the problem, which really simplifies the proble
 # What continuous shrinkage priors do we use?
 
 Right now, PRScs.jl implements:
-* Strawderman-Berger
-
-(Hopefully) soon, PRScs.jl will implement:
-* Dirichlet Laplace
+* Strawderman-Berger (a=1, b = 1/2)
+* Horseshoe (a=1/2, b = 1/2)
+* Dirichlet-Laplace
 
 # How do you derive the posterior mean for the beta coefficients?
 

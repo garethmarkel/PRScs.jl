@@ -19,6 +19,11 @@ function parse_param()
     s = ArgParseSettings()
 
     @add_arg_table s begin
+        "--model"
+            help = "Input either 'dirichlet-laplace' or 'strawderman'--strawderman isn't necesarily strawderman berger, but it's default is to behave as such unless you also specify an different a/b"
+            arg_type = String
+            default = 'strawderman'
+            required = true
         "--ref_dir"
             help = "Full path (including folder name) to the directory that contains information on the LD reference panel (the snpinfo file and hdf5 files)."
             arg_type = String
@@ -111,7 +116,7 @@ function main()
 
         ld_info = parse_ldblk("$rfdir/", sst_dict, chrom)
 
-        mcmc(parsed_args["a"], parsed_args["b"], parsed_args["phi"], sst_dict, parsed_args["n_gwas"], ld_info[1], ld_info[2],
+        mcmc(parsed_args["model"], parsed_args["a"], parsed_args["b"], parsed_args["phi"], sst_dict, parsed_args["n_gwas"], ld_info[1], ld_info[2],
             parsed_args["n_iter"], parsed_args["n_burnin"], parsed_args["thin"], chrom, parsed_args["out_dir"], parsed_args["beta_std"], parsed_args["seed"])
 
         print("\n")

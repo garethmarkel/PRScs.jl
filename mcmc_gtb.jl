@@ -1,64 +1,157 @@
 using Random, Distributions, GenInvGaussian
 
-##TODO:
-# 1. implement
-#   a. update_beta
-#   b. update_global_scale
-#   c. update_local_scale
+#steps:
+# 1. strawderman
+#   a. beta
+#   b. sigma
+#   c. delta
+#   d. psi
+#   e. phi (sometimes)
+# 2. DL
+#   a. beta
+#   b. sigma
 
+function set_dict(p)
+    if model == "strawderman"
+        prior_params = Dict(
+            "model" => "strawderman",
+            "beta" => zeros(Float64,p,1),
+            "beta_est" => zeros(Float64,p,1),
+            "psi" => ones(Float64,p,1),
+            "psi_est" => zeros(Float64,p,1),
+            "delta" => ones(Float64,p,1),
+            "delta_est" => zeros(Float64,p,1),
+            "phi" => 1.0,
+            "w" => 1.0,
+            "sigma" => 1.0,
+            "a" => a, #TODO: fix this placeholder
+            "b" => b #TODO: fix this placeholder
+        )
+    elseif model =="dirichlet-laplace"
+        prior_params = Dict(
+            "model" => "dirichlet-laplace",
+            "beta" => zeros(Float64,p,1),
+            "beta_est" => zeros(Float64,p,1),
+            "psi" => ones(Float64,p,1),
+            "psi_est" => zeros(Float64,p,1),
+            "lambda" => 1.0,
+            "lambda_est" => 0.0,
+            "tau" => ones(Float64,p,1),
+            "tau_est" => zeros(Float64,p,1)
+            "sigma" => 1.0,
+            "sigma_est" => 0.0,
+            "a" => 1.0 #TODO: fix this placeholder
+        )
+    end
 
-function get_shrinkage_mat(model, idx_blk, psi, lambda, tau)
-    if model == 'strawderman'
-        return Diagonal(1 ./ psi[idx_blk])
-    elseif model == 'dirichlet-laplace'
-        return Diagonal(1 ./ (psi[idx_blk] .* lambda .* lambda .* tau))
+    return prior_params
+end
+
+function update_hyperprior!(param_dict, hyperprior_update)
+    p = length(param_dict["beta"])
+    if param_dict["model"] == "strawderman"
+        if hyperprior_update == true
+            param_dict["w"] = rand(Gamma(1.0, 1.0/(phi+1.0)))
+            param_dict["phi"] = rand(Gamma(p*param_dict["b"]+0.5, 1.0/(sum(param_dict["delta"])+param_dict["w"])))
+        end
     end
 end
 
-#function to generate psi--notation varies prior ro prior, but I'm by convention setting it to be
-#one with the GenInvGaussian dist
-function get_psi(model, a, beta, delta, sigma)
-    #to run this, you may have to pull the fork https://github.com/garethmarkel/GenInvGaussian.jl
-    #again, this is not my original work--the original repo was for an older version of julia
-    #so I just updated the "paperwork" to get back to working on reimplementing PRScs
+#could also implement this: https://arxiv.org/pdf/1506.04778.pdf
+function update_beta(model, param_dict, dinvt, beta_mrg, idx_blk)
 
-    psi = ones(Float64,p,1)
+    dinvt_chol = cholesky(Hermitian(dinvt))
 
-    if model == 'strawderman'
+    block_size = length(beta_mrg[idx_blk])
 
-        psi_gig = GeneralizedInverseGaussian.(a-0.5, 2 .* delta, n .* (beta.^2) ./ sigma)
+    #Here, we use the cholesky decomposition to (Relatively) efficiently invert
+    #the matrix (D+ψ⁻¹) to get Σ = (D+ψ⁻¹)⁻¹ and sample in one fell swoop
+    #this gets more useful with big LD blocks (or if you want to fit this on like a whole chromosome)
+    beta_tmp = dinvt_chol.L\beta_mrg[idx_blk] .+  (sqrt(param_dict["sigma"]/n) .* rand(ndist,block_size))
+    return dinvt_chol.U\beta_tmp
+
+end
+
+function update_global_scale!(param_dict, beta_mrg, n, quad)
+
+    # #generate the variance for sigma^2
+    # #TODO: veryify that this sigmasq variance is right
+    # err = max(n/2.0 * (1.0 - 2.0*sum(beta.*beta_mrg) + quad), n/2.0*sum((beta.^2)./psi))
+    #
+    # #update sigma^2
+    # #prior versions sampled from a gamma(a,b^-1) but let's not do that anymore
+    # sigma = rand(InverseGamma((n+p)/2.0, err))
+
+    p = length(param_dict["beta"])
+
+    if param_dict["model"] == "strawderman"
+
+        err = max(n/2.0 * (1.0 - 2.0*sum(param_dict["beta"].*beta_mrg) + quad), n/2.0*sum((param_dict["beta"].^2)./param_dict["psi"]))
+
+        #update sigma^2
+        sigma = rand(InverseGamma((n+p)/2.0, err))
+
+    elseif param_dict["model"] =="dirichlet-laplace"
+
+        err = max(n/2.0 * (1.0 - 2.0*sum(param_dict["beta"].*beta_mrg) + quad), n/2.0*sum((param_dict["beta"].^2)./param_dict["psi"]))
+
+        #update sigma^2
+        sigma = rand(InverseGamma((n+p)/2.0, err))
+
+    end
+end
+
+#problem: this does all the modification *inside* the function--should be able to run update_local_scale!(model, param_dict, n) but need to test
+function update_local_scale!(param_dict, n)
+
+    if param_dict["model"] == "strawderman"
+        delta = rand.(Gamma.(param_dict["a"]+param_dict["b"], 1.0 ./ (param_dict["psi"] .+ param_dict["phi"])),1)
+        param_dict["delta"] = [i[1] for i in delta]
+
+        psi_gig = GeneralizedInverseGaussian.(param_dict["a"]-0.5, 2 .* param_dict["delta"], n .* (param_dict["beta"].^2) ./ param_dict["sigma"])
 
         ##TODO: fix this--should be able to broadcast it but the rand function in the implementation
         ##of the generlaized inverse gaussian function does one at a time
-        for jj in 1:length(psi)
-            psi[jj] = rand(psi_gig[jj])
+        for jj in 1:length(param_dict["psi"])
+            param_dict["psi"][jj] = rand(psi_gig[jj])
         end
-        psi[psi .> 1] .= 1.0
+        param_dict["psi"][param_dict["psi"] .> 1] .= 1.0
 
-        return psi
-    elseif model == 'dirichlet-laplace'
+    elseif param_dict["model"] =="dirichlet-laplace"
 
-        p = length(beta)
+        p = length(param_dict["beta"])
 
-        psi_gig = GeneralizedInverseGaussian.(2 .* beta ./ sqrt(sigma), 1.0 , a - 1 )
+        psi_gig = GeneralizedInverseGaussian.(2 .* param_dict["beta"] ./ sqrt(param_dict["sigma"]), 1.0 , param_dict["a"] - 1 )
 
-        for jj in 1:length(psi)
-            psi[jj] = rand(psi_gig[jj])
+        for jj in 1:length(param_dict["psi"])
+            param_dict["psi"][jj] = rand(psi_gig[jj])
         end
 
-        psi = psi ./ sum(psi)
+        param_dict["beta"] = param_dict["beta"] ./ sum(psi)
+
+        param_dict["lambda"] = rand(GeneralizedInverseGaussian(2*sum(abs(param_dict["beta"])./ param_dict["psi"])/sqrt(param_dict["sigma"]),1.0,p*param_dict["a"]-p)
+
+        tau_inv = rand.(InverseGaussian.(param_dict["lambda"] .* param_dict["psi"] .* sqrt(param_dict["sigma"]) ./ param_dict["beta"],1.0))
+        param_dict["tau"] = 1.0 ./ tau_inv
 
     end
 
-    return psi
+end
+
+function get_shrinkage_mat(idx_blk, param_dict)
+    if param_dict["model"] == "strawderman"
+        return Diagonal(1 ./ param_dict["psi"][idx_blk])
+    elseif param_dict["model"] == "dirichlet-laplace"
+        return Diagonal(1 ./ ((param_dict["psi"][idx_blk].^2) .* (param_dict["lambda"]^2) .* param_dict["tau"][idx_blk]))
+    end
 end
 
 
 
-function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, chrom, out_dir, beta_std, seed)
+function mcmc(model, a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, chrom, out_dir, beta_std, seed)
+
     print("... MCMC ...")
 
-    ##un hard code this! TODO
     Random.seed!(seed)
 
     beta_mrg = sst_dict[:,:BETA]
@@ -69,26 +162,14 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
     p = nrow(sst_dict)
     n_blk = length(ld_blk)
 
-    # initialization
-    beta = zeros(Float64,p,1)
-    psi = ones(Float64,p,1)
-    sigma = 1.0
-
-    ##dirichlet-laplace specific
-    lambda = 1.0
-    tau = ones(Float64,p,1)
+    param_dict = set_dict(a,b,p,phi)
 
     # if phi == None:
     #     phi = 1.0; phi_updt = True
     # else:
     #     phi_updt = False
-
+    # phi = 1.0
     phi_updt = true
-
-    beta_est = zeros(Float64,p,1)
-    psi_est = ones(Float64,p,1)
-    sigma_est = 0.0
-    phi_est = 0.0
 
     #create normal dist
     ndist = Normal(0,1)
@@ -106,63 +187,37 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
             if blk_size[kk] != 0
                 idx_blk = (mm+1):(mm + blk_size[kk])
 
-                shrinkage_mat = get_shrinkage_mat('strawderman', idx_blk, psi, lambda, tau)
+                shrinkage_mat = get_shrinkage_mat(idx_blk, param_dict)
 
                 dinvt = ld_blk[kk] .+ shrinkage_mat
 
-                dinvt_chol = cholesky(Hermitian(dinvt))
-
-                #Here, we use the cholesky decomposition to (Relatively) efficiently invert
-                #the matrix (D+ψ⁻¹) to get Σ = (D+ψ⁻¹)⁻¹ and sample in one fell swoop
-                #this gets more useful with big LD blocks (or if you want to fit this on like a whole chromosome)
-                beta_tmp = dinvt_chol.L\beta_mrg[idx_blk] .+  (sqrt(sigma/n) .* rand(ndist,blk_size[kk]))
-                beta[idx_blk] = dinvt_chol.U\beta_tmp
+                param_dict["beta"][idx_blk] = update_beta(param_dict, dinvt, beta_mrg, idx_blk)
 
                 #assume the LD blocks are independent, and iterate on the sum
-                quad = quad + beta[idx_blk]'*dinvt*beta[idx_blk]
+                quad = quad + param_dict["beta"][idx_blk]'*dinvt*param_dict["beta"][idx_blk]
                 mm = mm + blk_size[kk]
             end
         end
 
-        #generate the variance for sigma^2
-        err = max(n/2.0 * (1.0 - 2.0*sum(beta.*beta_mrg) + quad), n/2.0*sum((beta.^2)./psi))
+        update_global_scale!(param_dict, beta_mrg, n, quad)
 
-        #update sigma^2
-        #prior versions sampled from a gamma(a,b^-1) but let's not do that anymore
-        sigma = rand(InverseGamma((n+p)/2.0, err))
+        update_local_scale!(param_dict, n)
 
-        psi = get_psi(model, a, beta, delta, sigma)
-
-        if model == 'strawderman'
-            delta = rand.(Gamma.(a+b, 1.0 ./ (psi .+ phi)),1)
-            delta = [i[1] for i in delta]
-        end
-
-        if model == 'dirichlet-laplace'
-            lambda = rand(GeneralizedInverseGaussian(2*sum(abs(beta)./ psi)/sqrt(sigma),1.0,p*a-p)
-
-            tau_inv = rand.(InverseGaussian.(lambda .* psi .* sqrt(sigma) ./ beta,1.0))
-            tau = 1 ./ tau_inv
-        end
-
-
-        if phi_updt == true
-            w = rand(Gamma(1.0, 1.0/(phi+1.0)))
-            phi = rand(Gamma(p*b+0.5, 1.0/(sum(delta)+w)))
-        end
+        update_hyperprior!(param_dict, phi_updt)
 
         # posterior
         if itr>n_burnin & itr % thin == 0
-            beta_est = beta_est + beta/n_pst
-            psi_est = psi_est + psi/n_pst
-            sigma_est = sigma_est + sigma/n_pst
-            phi_est = phi_est + phi/n_pst
+            # beta_est = beta_est + beta/n_pst
+            param_dict["beta_est"] = param_dict["beta_est"] .+ param_dict["beta"]./n_pst
+            # psi_est = psi_est + psi/n_pst
+            # sigma_est = sigma_est + sigma/n_pst
+            # phi_est = phi_est + phi/n_pst
         end
 
     end
 
     if beta_std == false
-        beta_est = beta_est ./ sqrt.(2.0 .* maf .* (1.0 .- maf))
+        param_dict["beta_est"] = param_dict["beta_est"] ./ sqrt.(2.0 .* maf .* (1.0 .- maf))
     end
 
 
@@ -183,14 +238,14 @@ function mcmc(a, b, phi, sst_dict, n, ld_blk, blk_size, n_iter, n_burnin, thin, 
             bpw = sst_dict[:,:BP][i]
             a1w = sst_dict[:,:A1][i]
             a2w = sst_dict[:,:A2][i]
-            betaw = round(beta_est[i], digits = 6)
+            betaw = round(param_dict["beta_est"][i], digits = 6)
             write(file, "$chrom\t$snpw\t$bpw\t$a1w\t$a2w\t$betaw\n")
         end
     end
 
-    if phi_updt == true
-        print("... Estimated global shrinkage parameter: $phi_est ..." )
-    end
+    # if phi_updt == true
+    #     print("... Estimated global shrinkage parameter: $phi_est ..." )
+    # end
 
     print("... Done ...")
 end
