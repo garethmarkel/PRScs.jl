@@ -10,6 +10,7 @@ T Ge, CY Chen, Y Ni, YCA Feng, JW Smoller. Polygenic Prediction via Bayesian Reg
 Current status:
 
 * still needs to be tested/verified on genetic data
+* DL prior isn't super stable 
 
 Future additions:
 * more flexibility with the CS priors ?
@@ -33,7 +34,8 @@ a wacky discrete space grid into the problem, which really simplifies the proble
 Right now, PRScs.jl implements:
 * Strawderman-Berger (a=1, b = 1/2)
 * Horseshoe (a=1/2, b = 1/2)
-* Dirichlet-Laplace
+* Dirichlet-Laplace (note, good candidates for a here are 1/n, 1/p, 0.5)
+
 
 # How do you derive the posterior mean for the beta coefficients?
 

@@ -22,7 +22,7 @@ function parse_param()
         "--model"
             help = "Input either 'dirichlet-laplace' or 'strawderman'--strawderman isn't necesarily strawderman berger, but it's default is to behave as such unless you also specify an different a/b"
             arg_type = String
-            default = 'strawderman'
+            default = "strawderman"
             required = true
         "--ref_dir"
             help = "Full path (including folder name) to the directory that contains information on the LD reference panel (the snpinfo file and hdf5 files)."
@@ -100,7 +100,7 @@ function main()
     #could get fancier with the paralellization--maybe if future additions are really
     #slow i'll optimize this to really take advantage of large servers but this should make
     #base PRS-cs run fast on a desktop
-    Threads.@threads for i in 1:length(chrom_split)
+    for i in 1:length(chrom_split)
         chrom = chrom_split[i]
         print("process chromosome $chrom")
 
