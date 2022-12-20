@@ -14,7 +14,7 @@ Current status:
 
 Future additions:
 * more flexibility with the CS priors ?
-
+* better paralellization
 
 # What is PRS-cs?
 
