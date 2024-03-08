@@ -28,6 +28,10 @@ function parse_param()
             help = "Full path (including folder name) to the directory that contains information on the LD reference panel (the snpinfo file and hdf5 files)."
             arg_type = String
             required = true
+        "--ref_file"
+            help = "Full path (including folder name) to the directory that contains information on the LD reference panel (the snpinfo file and hdf5 files)."
+            arg_type = String
+            required = true
         "--bim_prefix"
             help = "Full path and the prefix of the bim file for the target (validation/testing) dataset."
             arg_type = String
@@ -96,6 +100,7 @@ function main()
 
     #get the reference directory for the LD information
     rfdir = parsed_args["ref_dir"]
+    rffle = parsed_args["ref_file"]
 
     #could get fancier with the paralellization--maybe if future additions are really
     #slow i'll optimize this to really take advantage of large servers but this should make
@@ -105,7 +110,7 @@ function main()
         print("process chromosome $chrom")
 
         #process the reference LD directory
-        ref_dict = parse_ref("$rfdir/snpinfo_1kg_hm3", chrom)
+        ref_dict = parse_ref("$rfdir/$rffle", chrom)
 
         #bim file containing valid SNPs
         vld_dict = parse_bim(parsed_args["bim_prefix"],chrom)
