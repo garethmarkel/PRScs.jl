@@ -33,11 +33,17 @@ Right now, PRScs.jl implements:
 The basic model is:
 
 $y = Z\beta + \epsilon$
+
 $\epsilon \sim N(0, \sigma^2 I)$
+
 $p(\sigma^2) \propto \sigma^{-2}$
+
 $\beta_j \sim N(0, \frac{\sigma^2}{N}\tau_j\phi_j^2\lambda^2)$
+
 $\tau_j \sim Exp(1/2)$
+
 $\phi_j \sim Dir(a,...a)$
+
 $\lambda \sim G(pa, 1/2)$
 
 where both $y$ and $z$ have been standardized. Let $\hat{\beta} = Z'y/N$ represent the GWAS estimates for $M$ SNPs. Let $\Psi = diag(\frac{\sigma^2}{N}\tau_j\phi_j^2\lambda^2)_{\{j\}}$, and $D = Z'Z/N$ (the LD matrix).
