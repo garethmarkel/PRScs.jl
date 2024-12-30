@@ -61,10 +61,15 @@ The Gibbs sampler is as follows:
 The basic model is:
 
 $y = Z\beta + \epsilon$
+
 $\epsilon \sim N(0, \sigma^2 I)$
+
 $p(\sigma^2) \propto \sigma^{-2}$
+
 $\beta_j \sim N(0, \frac{\sigma^2}{N}\psi_j)$
+
 $\psi_j \sim G(a, \delta_j)$
+
 $\delta_j \sim G(b, \phi)$
 
 where both $y$ and $z$ have been standardized. Let $\hat{\beta} = Z'y/N$ represent the GWAS estimates for $M$ SNPs. Let $\Psi = diag(\psi_{\{j\}})$, and $D = Z'Z/N$ (the LD matrix).
